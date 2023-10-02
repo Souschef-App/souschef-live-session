@@ -1,4 +1,4 @@
-module mymodule
+module souschef
 
 go 1.21.1
 
