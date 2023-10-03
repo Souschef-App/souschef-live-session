@@ -1,31 +1,24 @@
 package server
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
+	"souschef/client"
+	"souschef/internal/utils"
 )
 
 func RouteMessage(data []byte) error {
-	var message map[string]interface{}
+	var msg client.Message
 
 	// Decode JSON
-	if err := json.Unmarshal(data, &message); err != nil {
+	if err := utils.DecodeJSON(data, &msg); err != nil {
 		return err
 	}
 
-	// Check if JSON contains a 'type' field of type string
-	messageType, ok := message["type"].(string)
-	if !ok {
-		errMsg := "message is missing a 'type' field or it's not a string"
-		return errors.New(errMsg)
-	}
-
 	// Delegate to appropriate handler
-	handler, exists := messageHandlers[messageType]
+	handler, exists := messageHandlers[msg.Type]
 	if !exists {
-		return fmt.Errorf("unknown command type: %s", messageType)
+		return fmt.Errorf("unknown command type: %s", msg.Type)
 	}
 
-	return handler(data)
+	return handler(msg.Payload)
 }
