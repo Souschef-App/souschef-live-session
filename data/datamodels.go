@@ -28,6 +28,7 @@ type Task struct {
 	Dependencies []Task        `json:"dependencies"`
 	Ingredients  []Ingredient  `json:"ingredients"`
 	Kitchenware  []Kitchenware `json:"kitchenware"`
+	AssigneeID   string
 }
 
 type Ingredient struct {

@@ -3,26 +3,32 @@ package server
 import (
 	"fmt"
 	"net/http"
-	"strings"
+	"souschef/internal/session"
 	"sync"
 
 	"github.com/gorilla/websocket"
 )
 
-var fakeToken = "1w2r2ol3XKhA98LYvHOmLggYcHtrVp2MH3VheZ4cdLA6VKmyzgYQXYtbyTfXqWux"
+var (
+	upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			// Origin validation logic here
+			return true
+		},
+	}
+	connectionsMu sync.Mutex
+	connections   = make(map[*websocket.Conn]string)
+)
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
-
-var connectionsMu sync.Mutex
-var connectionsCount int
-
-func StartWebSocket() {
+func StartWebSocket(addr string) {
 	http.HandleFunc("/ws", handleWebSocket)
 	fmt.Println("WebSocket server started on :8080/ws")
-	http.ListenAndServe(":8080", nil)
+	err := http.ListenAndServe(addr, nil)
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -33,59 +39,52 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	defer func() {
-		conn.Close()
-		connectionsMu.Lock()
-		connectionsCount--
-		connectionsMu.Unlock()
-		fmt.Printf("Client disconnected. Total connections: %d\n", connectionsCount)
-	}()
-
-	connectionsMu.Lock()
-	connectionsCount++
-	connectionsMu.Unlock()
-
-	fmt.Printf("Client connected. Total connections: %d\n", connectionsCount)
-
-	if !authenticateUser(r) {
-		closeMessage := websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "Authentication failed")
-		if err := conn.WriteMessage(websocket.CloseMessage, closeMessage); err != nil {
-			fmt.Println(err)
-		}
+	userID := r.Header.Get("UserID")
+	if userID == "" {
+		reportError(conn, fmt.Errorf("userID missing in header or invalid"))
 		return
 	}
 
-	for {
-		// Read a message from the WebSocket client
-		messageType, p, err := conn.ReadMessage()
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		// Print the received message
-		fmt.Printf("Received message: %s\n", p)
-
-		if messageType == websocket.TextMessage {
-			if err := RouteMessage(p); err != nil {
-				fmt.Println("Error handling message:", err)
-				return
-			}
-		}
-	}
+	registerConnection(conn, userID)
+	handleMessage(conn) // Blocking call
+	unregisterConnection(conn)
 }
 
-func authenticateUser(r *http.Request) bool {
-	fmt.Println("Authenticating user...")
-	authHeader := r.Header.Get("Authorization")
+func registerConnection(conn *websocket.Conn, userID string) {
+	connectionsMu.Lock()
 
-	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-		fmt.Println("Invalid or missing Authorization header")
-		return false
+	// Enforce single connection per user.
+	// Replace existing connection with new if user is already connected.
+	for oldConn, oldUserID := range connections {
+		if userID == oldUserID {
+			oldConn.Close()
+			delete(connections, oldConn)
+			break
+		}
 	}
 
-	token := strings.TrimPrefix(authHeader, "Bearer ")
+	// Associate connection with userID
+	connections[conn] = userID
+	fmt.Printf("Client connected. Total connections: %d\n", len(connections))
+	connectionsMu.Unlock()
 
-	fmt.Println("Token:", token)
-	return token == fakeToken
+	// Associate userID with Helper
+	session.Live.AddHelper(userID)
+}
+
+func unregisterConnection(conn *websocket.Conn) {
+	connectionsMu.Lock()
+
+	// Remove userID to Helper association
+	userID, exist := connections[conn]
+	if exist {
+		session.Live.RemoveHelper(userID)
+	}
+
+	// Remove connection to userID association
+	delete(connections, conn)
+
+	conn.Close()
+	fmt.Printf("Client disconnected. Total connections: %d\n", len(connections))
+	connectionsMu.Unlock()
 }
