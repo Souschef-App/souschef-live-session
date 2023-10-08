@@ -23,14 +23,12 @@ func handleMessage(conn *websocket.Conn) {
 
 		if messageType == websocket.TextMessage {
 			if err := routeMessage(conn, p); err != nil {
-				// TODO: Improve error handling to gracefully handle errors
-				// without prematurely closing the connection.
-				// -------------------------------------------
-				// Consider using a custom error structure for non-urgent errors,
-				// so that when a custom error is encountered, it can be reported
-				// without severing the connection.
 				fmt.Println("An error occured:", err)
-				return
+				errMsg := &message.ServerMessage{
+					Type:    "error",
+					Payload: err.Error(),
+				}
+				transmit(conn, errMsg)
 			}
 		}
 
@@ -44,7 +42,8 @@ func routeMessage(conn *websocket.Conn, data []byte) error {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&msg); err != nil {
-		return err
+		fmt.Println("Failed to decode message.")
+		return fmt.Errorf("invalid message")
 	}
 
 	// Delegate to appropriate handler
