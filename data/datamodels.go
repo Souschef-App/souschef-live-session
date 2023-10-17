@@ -11,7 +11,7 @@ type Recipe struct {
 	ID          string        `json:"id"`
 	Name        string        `json:"name"`
 	Duration    float64       `json:"duration"`
-	Difficulty  int           `json:"difficulty"`
+	Difficulty  Difficulty    `json:"difficulty"`
 	NumServings int           `json:"num_servings"`
 	Tasks       []Task        `json:"tasks"`
 	Ingredient  []Ingredient  `json:"ingredients"`
@@ -23,12 +23,12 @@ type Task struct {
 	Title        string        `json:"title"`
 	Description  string        `json:"description"`
 	Duration     float64       `json:"duration"`
-	Difficulty   int           `json:"difficulty"`
+	Difficulty   Difficulty    `json:"difficulty"`
 	Priority     int           `json:"priority"`
-	Dependencies []Task        `json:"dependencies"`
+	Dependencies []string      `json:"dependencies"`
 	Ingredients  []Ingredient  `json:"ingredients"`
 	Kitchenware  []Kitchenware `json:"kitchenware"`
-	AssigneeID   string
+	Completed    bool
 }
 
 type Ingredient struct {
@@ -42,4 +42,9 @@ type Kitchenware struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Quantity int    `json:"quantity"`
+}
+
+type Helper struct {
+	TaskID string
+	Skill  SkillLevel
 }

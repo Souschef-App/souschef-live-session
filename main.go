@@ -19,14 +19,20 @@ func main() {
 			ID:       "123",
 			HostID:   "123",
 			Occasion: data.Home,
-			Recipes:  []data.Recipe{},
+			Recipes:  []data.Recipe{data.DefaultRecipe},
 		}
 
 		session.Live = &session.Session{
 			IsRunning: false,
-			Helpers:   make(map[string]*session.Helper),
+			Helpers:   make(map[string]*data.Helper),
 			HostID:    mealplan.HostID,
 			Recipes:   mealplan.Recipes,
+			TaskManager: session.TaskManager{
+				QueuedTasks:   []*data.Task{},
+				TaskRegistry:  make(map[string]*data.Task),
+				AssignedTasks: make(map[string]*data.Task),
+				Dependants:    make(map[string][]string),
+			},
 		}
 
 		close(requestResolved)
@@ -34,6 +40,7 @@ func main() {
 
 	<-requestResolved
 
+	session.Live.Start("123")
 	server.StartWebSocket(":8080")
 
 	// TODO: Kafka message:

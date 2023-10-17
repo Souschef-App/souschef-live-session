@@ -3,13 +3,18 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	message "souschef/data"
+	"souschef/internal/message"
 
 	"github.com/gorilla/websocket"
 )
 
 // TODO: Implement retry mechanism
-func transmit(conn *websocket.Conn, msg *message.ServerMessage) {
+func transmit(conn *websocket.Conn, msgType message.ServerMessageEnum, payload any) {
+	msg := message.ServerMessage{
+		Type:    msgType,
+		Payload: payload,
+	}
+
 	jsonData, err := json.Marshal(msg)
 	if err != nil {
 		fmt.Println("Failed to serialize server message")
@@ -23,7 +28,12 @@ func transmit(conn *websocket.Conn, msg *message.ServerMessage) {
 }
 
 // TODO: Implement retry mechanism
-func broadcast(msg *message.ServerMessage) {
+func broadcast(msgType message.ServerMessageEnum, payload any) {
+	msg := message.ServerMessage{
+		Type:    msgType,
+		Payload: payload,
+	}
+
 	jsonData, err := json.Marshal(msg)
 	if err != nil {
 		fmt.Println("Failed to serialize server message")

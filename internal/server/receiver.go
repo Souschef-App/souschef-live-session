@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	message "souschef/data"
+	"souschef/internal/message"
 
 	"github.com/gorilla/websocket"
 )
@@ -24,11 +24,7 @@ func handleMessage(conn *websocket.Conn) {
 		if messageType == websocket.TextMessage {
 			if err := routeMessage(conn, p); err != nil {
 				fmt.Println("An error occured:", err)
-				errMsg := &message.ServerMessage{
-					Type:    "error",
-					Payload: err.Error(),
-				}
-				transmit(conn, errMsg)
+				transmit(conn, message.ServerError, err.Error())
 			}
 		}
 

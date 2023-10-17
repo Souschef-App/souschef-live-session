@@ -1,8 +1,10 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"souschef/internal/message"
 	"souschef/internal/session"
 	"sync"
 
@@ -10,6 +12,7 @@ import (
 )
 
 var (
+	server   *http.Server
 	upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -25,8 +28,9 @@ var (
 func StartWebSocket(addr string) {
 	http.HandleFunc("/ws", handleWebSocket)
 	fmt.Println("WebSocket server started on :8080/ws")
-	err := http.ListenAndServe(addr, nil)
-	if err != nil {
+
+	server = &http.Server{Addr: addr}
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		fmt.Println(err)
 	}
 }
@@ -39,7 +43,8 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID := r.Header.Get("UserID")
+	// userID := r.Header.Get("UserID")
+	userID := r.URL.Query().Get("UserID")
 	if userID == "" {
 		reportError(conn, fmt.Errorf("userID missing in header or invalid"))
 		return
@@ -52,6 +57,8 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 func registerConnection(conn *websocket.Conn, userID string) {
 	connectionsMu.Lock()
+
+	fmt.Println("New User Joined with ID:", userID)
 
 	// Enforce single connection per user.
 	// Replace existing connection with new if user is already connected.
@@ -70,6 +77,17 @@ func registerConnection(conn *websocket.Conn, userID string) {
 
 	// Associate userID with Helper
 	session.Live.AddHelper(userID)
+
+	// Update user immediately if session is running
+	if session.Live.IsRunning {
+		task, err := session.Live.AssignTask(userID)
+		if err != nil {
+			transmit(conn, message.ServerError, err.Error())
+			return
+		}
+
+		transmit(conn, message.ServerTaskNew, task)
+	}
 }
 
 func unregisterConnection(conn *websocket.Conn) {
@@ -87,4 +105,10 @@ func unregisterConnection(conn *websocket.Conn) {
 	conn.Close()
 	fmt.Printf("Client disconnected. Total connections: %d\n", len(connections))
 	connectionsMu.Unlock()
+
+	if len(connections) == 0 {
+		if err := server.Shutdown(context.TODO()); err != nil {
+			fmt.Println("HTTP server shutdown error:", err)
+		}
+	}
 }

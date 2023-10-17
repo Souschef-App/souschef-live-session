@@ -6,16 +6,13 @@ import (
 	"sync"
 )
 
-type Helper struct {
-	TaskID string
-}
-
 type Session struct {
-	IsRunning bool
-	HostID    string
-	Helpers   map[string]*Helper
-	Recipes   []data.Recipe
-	mu        sync.Mutex
+	IsRunning   bool
+	HostID      string
+	Helpers     map[string]*data.Helper
+	Recipes     []data.Recipe
+	TaskManager TaskManager
+	mu          sync.Mutex
 }
 
 var Live *Session
@@ -31,6 +28,7 @@ func (s *Session) Start(userID string) error {
 	}
 
 	s.IsRunning = true
+	s.TaskManager.Init(s.Recipes)
 	fmt.Println("Live session started!")
 
 	return nil
@@ -39,17 +37,22 @@ func (s *Session) Start(userID string) error {
 func (s *Session) Stop(userID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	if userID != s.HostID {
 		return fmt.Errorf("only the session host can stop the session")
-	} else if !s.IsRunning {
+	}
+
+	return s.internalStop()
+}
+
+func (s *Session) internalStop() error {
+	if !s.IsRunning {
 		return fmt.Errorf("session has not started")
 	}
 
 	s.IsRunning = false
 	fmt.Println("Live session stopped.")
 
-	// TODO: Reset to default
+	// TODO: Reset algorithm to default
 
 	return nil
 }
@@ -57,14 +60,19 @@ func (s *Session) Stop(userID string) error {
 func (s *Session) AddHelper(userID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.Helpers[userID] = &Helper{}
+	s.Helpers[userID] = &data.Helper{
+		Skill: data.Expert,
+	}
 }
 
 func (s *Session) RemoveHelper(userID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// TODO: Handle unfinished tasks
+	helper := s.Helpers[userID]
+	if helper.TaskID != "" {
+		s.TaskManager.UnassignTask(helper.TaskID)
+	}
 
 	delete(s.Helpers, userID)
 }
@@ -73,24 +81,59 @@ func (s *Session) CompleteTask(userID string) (*data.Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if !s.IsRunning {
+		return nil, fmt.Errorf("session has not started")
+	}
+
 	helper, exist := s.Helpers[userID]
 	if !exist {
 		return nil, fmt.Errorf("user not found")
 	}
 
-	// TODO:
-	// 1. Get users task (might have error: "task completion desync" where user has no assigned task)
-	task := &data.Task{}
-	// 2. Complete task in algorithm
-	// 3. Remove task from helper
+	task := s.TaskManager.CompleteTask(helper.TaskID)
+	if task == nil {
+		return nil, fmt.Errorf("task not found")
+	}
+
+	// TODO: Refine this idea
+	if s.TaskManager.AllTasksCompleted() {
+		s.internalStop()
+	}
+
 	helper.TaskID = ""
 
 	return task, nil
 }
 
+func (s *Session) RerollTask(userID string) (*data.Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.IsRunning {
+		return nil, fmt.Errorf("session has not started")
+	}
+
+	helper, exist := s.Helpers[userID]
+	if !exist {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	newTask := s.TaskManager.ReassignTask(helper.TaskID, helper.Skill)
+	helper.TaskID = ""
+	if newTask != nil {
+		helper.TaskID = newTask.ID
+	}
+
+	return newTask, nil
+}
+
 func (s *Session) AssignTask(userID string) (*data.Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if !s.IsRunning {
+		return nil, fmt.Errorf("session has not started")
+	}
 
 	helper, exist := s.Helpers[userID]
 	if !exist {
@@ -99,11 +142,10 @@ func (s *Session) AssignTask(userID string) (*data.Task, error) {
 		return nil, fmt.Errorf("user already assigned task")
 	}
 
-	// TODO: Get task from algorithm
-	task := &data.Task{}
+	task := s.TaskManager.GetTask(helper.Skill)
+	if task != nil {
+		helper.TaskID = task.ID
+	}
 
-	helper.TaskID = task.ID
-	task.AssigneeID = userID
-
-	return task, nil
+	return task, nil // task can be nil, meaning no suitable task
 }
