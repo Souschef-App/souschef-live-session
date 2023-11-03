@@ -3,16 +3,31 @@ package session
 import (
 	"fmt"
 	"souschef/data"
+	"souschef/internal/utils"
 	"sync"
+	"time"
 )
 
+// TODO: Keep track of live feed
 type Session struct {
 	IsRunning   bool
 	HostID      string
-	Helpers     map[string]*data.Helper
-	Recipes     []data.Recipe
-	TaskManager TaskManager
+	Recipes     []*data.Recipe
+	Livefeed    []*data.FeedSnapshot
+	TaskManager *TaskManager
+	Observable  *utils.Observable
 	mu          sync.Mutex
+}
+
+func CreateSession(mealplan data.MealPlan) *Session {
+	return &Session{
+		IsRunning:   false,
+		HostID:      mealplan.HostID,
+		Recipes:     mealplan.Recipes,
+		Livefeed:    []*data.FeedSnapshot{},
+		TaskManager: CreateTaskManager(),
+		Observable:  utils.CreateObservable(),
+	}
 }
 
 var Live *Session
@@ -57,55 +72,33 @@ func (s *Session) internalStop() error {
 	return nil
 }
 
-func (s *Session) AddHelper(userID string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.Helpers[userID] = &data.Helper{
-		Skill: data.Expert,
-	}
-}
-
-func (s *Session) RemoveHelper(userID string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	helper := s.Helpers[userID]
-	if helper.TaskID != "" {
-		s.TaskManager.UnassignTask(helper.TaskID)
-	}
-
-	delete(s.Helpers, userID)
-}
-
-func (s *Session) CompleteTask(userID string) (*data.Task, error) {
+func (s *Session) CompleteTask(user *data.User) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if !s.IsRunning {
-		return nil, fmt.Errorf("session has not started")
+		return fmt.Errorf("session has not started")
 	}
 
-	helper, exist := s.Helpers[userID]
-	if !exist {
-		return nil, fmt.Errorf("user not found")
+	// 1. Mark task as completed
+	completedTask := s.TaskManager.CompleteTask(user.TaskID)
+	if completedTask == nil {
+		return fmt.Errorf("task completed not found")
 	}
 
-	task := s.TaskManager.CompleteTask(helper.TaskID)
-	if task == nil {
-		return nil, fmt.Errorf("task not found")
-	}
+	// 2. Unassign user's task
+	user.TaskID = ""
+	s.recordSnapshot(user, completedTask, data.Completed)
 
 	// TODO: Refine this idea
 	if s.TaskManager.AllTasksCompleted() {
 		s.internalStop()
 	}
 
-	helper.TaskID = ""
-
-	return task, nil
+	return nil
 }
 
-func (s *Session) RerollTask(userID string) (*data.Task, error) {
+func (s *Session) RerollTask(user *data.User) (*data.Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -113,21 +106,21 @@ func (s *Session) RerollTask(userID string) (*data.Task, error) {
 		return nil, fmt.Errorf("session has not started")
 	}
 
-	helper, exist := s.Helpers[userID]
-	if !exist {
-		return nil, fmt.Errorf("user not found")
+	var userSkillLevel = user.SkillLevel
+	if user.ID == s.HostID {
+		userSkillLevel = data.Expert
 	}
 
-	newTask := s.TaskManager.ReassignTask(helper.TaskID, helper.Skill)
-	helper.TaskID = ""
-	if newTask != nil {
-		helper.TaskID = newTask.ID
+	newTask := s.TaskManager.ReassignTask(user.TaskID, userSkillLevel)
+	if newTask != nil && user.TaskID != newTask.ID {
+		user.TaskID = newTask.ID
+		s.recordSnapshot(user, newTask, data.Rerolled)
 	}
 
 	return newTask, nil
 }
 
-func (s *Session) AssignTask(userID string) (*data.Task, error) {
+func (s *Session) AssignTask(user *data.User) (*data.Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -135,17 +128,32 @@ func (s *Session) AssignTask(userID string) (*data.Task, error) {
 		return nil, fmt.Errorf("session has not started")
 	}
 
-	helper, exist := s.Helpers[userID]
-	if !exist {
-		return nil, fmt.Errorf("user not found")
-	} else if helper.TaskID != "" {
+	if user.TaskID != "" {
 		return nil, fmt.Errorf("user already assigned task")
 	}
 
-	task := s.TaskManager.GetTask(helper.Skill)
-	if task != nil {
-		helper.TaskID = task.ID
+	var userSkillLevel = user.SkillLevel
+	if user.ID == s.HostID {
+		userSkillLevel = data.Expert
 	}
 
-	return task, nil // task can be nil, meaning no suitable task
+	task := s.TaskManager.GetTask(userSkillLevel)
+	if task != nil {
+		user.TaskID = task.ID
+		s.recordSnapshot(user, task, data.Assigned)
+	}
+
+	return task, nil // task can be nil when no suitable task found
+}
+
+func (s *Session) recordSnapshot(user *data.User, task *data.Task, status data.TaskStatus) {
+	feedSnapshot := &data.FeedSnapshot{
+		User:      user,
+		Task:      task,
+		Status:    status,
+		Timestamp: time.Now(),
+	}
+
+	s.Livefeed = append(s.Livefeed, feedSnapshot)
+	s.Observable.NotifyObservers("test")
 }

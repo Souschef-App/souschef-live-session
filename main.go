@@ -19,21 +19,10 @@ func main() {
 			ID:       "123",
 			HostID:   "123",
 			Occasion: data.Home,
-			Recipes:  []data.Recipe{data.DefaultRecipe},
+			Recipes:  []*data.Recipe{&data.DefaultRecipe},
 		}
 
-		session.Live = &session.Session{
-			IsRunning: false,
-			Helpers:   make(map[string]*data.Helper),
-			HostID:    mealplan.HostID,
-			Recipes:   mealplan.Recipes,
-			TaskManager: session.TaskManager{
-				QueuedTasks:   []*data.Task{},
-				TaskRegistry:  make(map[string]*data.Task),
-				AssignedTasks: make(map[string]*data.Task),
-				Dependants:    make(map[string][]string),
-			},
-		}
+		session.Live = session.CreateSession(mealplan)
 
 		close(requestResolved)
 	}()

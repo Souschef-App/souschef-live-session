@@ -48,5 +48,5 @@ func routeMessage(conn *websocket.Conn, data []byte) error {
 		return fmt.Errorf("unknown command")
 	}
 
-	return handler(conn)
+	return handler(conn, msg.Payload)
 }

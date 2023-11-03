@@ -1,10 +1,31 @@
 package data
 
+import "time"
+
+type WelcomeSnapshot struct {
+	Users    []*User         `json:"users"`
+	Livefeed []*FeedSnapshot `json:"livefeed"`
+}
+
+type FeedSnapshot struct {
+	User      *User      `json:"user"`
+	Task      *Task      `json:"task"`
+	Status    TaskStatus `json:"status"`
+	Timestamp time.Time  `json:"timestamp"`
+}
+
+type User struct {
+	ID         string     `json:"id"`
+	Name       string     `json:"name"`
+	SkillLevel SkillLevel `json:"skillLevel"`
+	TaskID     string     `json:"taskID"`
+}
+
 type MealPlan struct {
 	ID       string       `json:"id"`
-	HostID   string       `json:"host_id"`
+	HostID   string       `json:"hostID"`
 	Occasion OccasionType `json:"occasion"`
-	Recipes  []Recipe     `json:"recipes"`
+	Recipes  []*Recipe    `json:"recipes"`
 }
 
 type Recipe struct {
@@ -12,7 +33,7 @@ type Recipe struct {
 	Name        string        `json:"name"`
 	Duration    float64       `json:"duration"`
 	Difficulty  Difficulty    `json:"difficulty"`
-	NumServings int           `json:"num_servings"`
+	NumServings int           `json:"numServings"`
 	Tasks       []Task        `json:"tasks"`
 	Ingredient  []Ingredient  `json:"ingredients"`
 	Kitchenware []Kitchenware `json:"kitchenware"`
@@ -42,9 +63,4 @@ type Kitchenware struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Quantity int    `json:"quantity"`
-}
-
-type Helper struct {
-	TaskID string
-	Skill  SkillLevel
 }

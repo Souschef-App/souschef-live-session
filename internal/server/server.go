@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"souschef/data"
 	"souschef/internal/message"
 	"souschef/internal/session"
 	"sync"
@@ -22,7 +23,7 @@ var (
 		},
 	}
 	connectionsMu sync.Mutex
-	connections   = make(map[*websocket.Conn]string)
+	connections   = make(map[*websocket.Conn]*data.User)
 )
 
 func StartWebSocket(addr string) {
@@ -43,64 +44,58 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// userID := r.Header.Get("UserID")
-	userID := r.URL.Query().Get("UserID")
-	if userID == "" {
-		reportError(conn, fmt.Errorf("userID missing in header or invalid"))
-		return
-	}
-
-	registerConnection(conn, userID)
+	// TODO: Close connection if no handshake occurs
 	handleMessage(conn) // Blocking call
 	unregisterConnection(conn)
 }
 
-func registerConnection(conn *websocket.Conn, userID string) {
+// Gets called inside handlers.go
+func registerConnection(conn *websocket.Conn, user *data.User) {
 	connectionsMu.Lock()
+	defer connectionsMu.Unlock()
 
-	fmt.Println("New User Joined with ID:", userID)
+	var users = []*data.User{}
 
 	// Enforce single connection per user.
-	// Replace existing connection with new if user is already connected.
-	for oldConn, oldUserID := range connections {
-		if userID == oldUserID {
-			oldConn.Close()
-			delete(connections, oldConn)
-			break
+	for existConn, existUser := range connections {
+		// Replace existing connection with new if user is already connected.
+		if user.ID == existUser.ID {
+			existConn.Close()
+			delete(connections, existConn)
 		}
+
+		// Compile list of connected users for welcome snapshot
+		users = append(users, existUser)
 	}
 
-	// Associate connection with userID
-	connections[conn] = userID
+	broadcast(message.ServerClientConnected, user)
+
+	welcomeSnapshot := &data.WelcomeSnapshot{
+		Users:    users,
+		Livefeed: session.Live.Livefeed,
+	}
+
+	transmit(conn, message.ServerHandshake, welcomeSnapshot)
+
+	// Associate connection with user
+	connections[conn] = user
+
 	fmt.Printf("Client connected. Total connections: %d\n", len(connections))
-	connectionsMu.Unlock()
-
-	// Associate userID with Helper
-	session.Live.AddHelper(userID)
-
-	// Update user immediately if session is running
-	if session.Live.IsRunning {
-		task, err := session.Live.AssignTask(userID)
-		if err != nil {
-			transmit(conn, message.ServerError, err.Error())
-			return
-		}
-
-		transmit(conn, message.ServerTaskNew, task)
-	}
 }
 
 func unregisterConnection(conn *websocket.Conn) {
 	connectionsMu.Lock()
 
-	// Remove userID to Helper association
-	userID, exist := connections[conn]
+	user, exist := connections[conn]
 	if exist {
-		session.Live.RemoveHelper(userID)
-	}
+		// Gracefully handle uncompleted tasks
+		session.Live.TaskManager.UnassignTask(user.TaskID)
 
-	// Remove connection to userID association
-	delete(connections, conn)
+		delete(connections, conn)
+
+		// Notify other connected users
+		broadcast(message.ServerClientDisconnected, user)
+	}
 
 	conn.Close()
 	fmt.Printf("Client disconnected. Total connections: %d\n", len(connections))

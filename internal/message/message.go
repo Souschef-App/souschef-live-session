@@ -1,13 +1,18 @@
 package message
 
+import "encoding/json"
+
 // Receive
 type ClientMessage struct {
-	Type ClientMessageEnum `json:"type"`
+	Type    ClientMessageEnum `json:"type"`
+	Payload json.RawMessage   `json:"payload"`
 }
 
+// Receive
 type ClientMessageEnum string
 
 const (
+	ClientHandshake     ClientMessageEnum = "client_handshake"
 	ClientStartSession  ClientMessageEnum = "session_start"
 	ClientStopSession   ClientMessageEnum = "session_stop"
 	ClientCompletedTask ClientMessageEnum = "task_completed"
@@ -17,15 +22,18 @@ const (
 // Send
 type ServerMessage struct {
 	Type    ServerMessageEnum `json:"type"`
-	Payload interface{}       `json:"payload"`
+	Payload any               `json:"payload"`
 }
 
 // Send
 type ServerMessageEnum string
 
 const (
-	ServerError         ServerMessageEnum = "error"
-	ServerTaskNew       ServerMessageEnum = "task_new"
-	ServerTaskCompleted ServerMessageEnum = "task_completed"
-	ServerMealCompleted ServerMessageEnum = "meal_completed"
+	ServerError              ServerMessageEnum = "error"
+	ServerHandshake          ServerMessageEnum = "server_handshake"
+	ServerClientConnected    ServerMessageEnum = "client_connected"
+	ServerClientDisconnected ServerMessageEnum = "client_disconnected"
+	ServerMealCompleted      ServerMessageEnum = "meal_completed"
+	ServerTaskNew            ServerMessageEnum = "task_new"
+	ServerFeedSnapshot       ServerMessageEnum = "feed_snapshot"
 )

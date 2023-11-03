@@ -1,5 +1,13 @@
 package data
 
+type TaskStatus int
+
+const (
+	Assigned TaskStatus = iota
+	Completed
+	Rerolled
+)
+
 type SkillLevel int
 
 const (

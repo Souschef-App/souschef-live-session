@@ -47,12 +47,3 @@ func broadcast(msgType message.ServerMessageEnum, payload any) {
 		}
 	}
 }
-
-func reportError(conn *websocket.Conn, err error) {
-	closeMsg := websocket.FormatCloseMessage(websocket.ClosePolicyViolation, err.Error())
-	if err := conn.WriteMessage(websocket.CloseMessage, closeMsg); err != nil {
-		fmt.Println(err)
-	}
-
-	fmt.Println("An error occured:", err)
-}

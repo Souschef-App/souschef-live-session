@@ -12,6 +12,15 @@ type TaskManager struct {
 	QueuedTasks   []*data.Task
 }
 
+func CreateTaskManager() *TaskManager {
+	return &TaskManager{
+		TaskRegistry:  make(map[string]*data.Task),
+		AssignedTasks: make(map[string]*data.Task),
+		Dependants:    make(map[string][]string),
+		QueuedTasks:   []*data.Task{},
+	}
+}
+
 func (t *TaskManager) AllTasksCompleted() bool {
 	for _, task := range t.TaskRegistry {
 		if !task.Completed {
@@ -22,7 +31,7 @@ func (t *TaskManager) AllTasksCompleted() bool {
 	return true
 }
 
-func (t *TaskManager) Init(recipes []data.Recipe) {
+func (t *TaskManager) Init(recipes []*data.Recipe) {
 	// Create task registry & preload task queue
 	for _, recipe := range recipes {
 		for _, task := range recipe.Tasks {
@@ -66,20 +75,28 @@ func (t *TaskManager) GetTask(skill data.SkillLevel) *data.Task {
 	return nil
 }
 
+// Marks a task as completed and removes it from the assigned tasks.
+// It checks if any dependent tasks can now be queued and adds them to the queue.
+//
+// Parameters:
+// - taskID: The unique identifier of the task to complete.
+//
+// Returns:
+// - The completed task or nil if the task does not exist in the assigned tasks.
 func (t *TaskManager) CompleteTask(taskID string) *data.Task {
-	// Find task
+	// 1. Mark task as completed
 	task, exist := t.AssignedTasks[taskID]
 	if !exist {
 		return nil
 	}
 
-	// Remove task from assigned tasks
-	delete(t.AssignedTasks, taskID)
 	task.Completed = true
 
-	var oldQueueSize = len(t.QueuedTasks)
+	// 2. Remove task from assigned tasks
+	delete(t.AssignedTasks, taskID)
 
-	// Check if any dependent tasks can now be queued
+	// 3. Check if any dependent tasks can now be queued
+	var oldQueueSize = len(t.QueuedTasks)
 	dependants, exist := t.Dependants[task.ID]
 	if exist {
 		for _, taskID := range dependants {
@@ -90,8 +107,10 @@ func (t *TaskManager) CompleteTask(taskID string) *data.Task {
 		}
 	}
 
-	if len(t.QueuedTasks) != oldQueueSize {
-		// Re-sort queue based on duration
+	var queueModified = len(t.QueuedTasks) != oldQueueSize
+
+	// 4. Re-sort queued tasks based on duration (Optional)
+	if queueModified {
 		sort.Slice(t.QueuedTasks, func(i, j int) bool {
 			return t.QueuedTasks[i].Duration > t.QueuedTasks[j].Duration
 		})
@@ -101,12 +120,7 @@ func (t *TaskManager) CompleteTask(taskID string) *data.Task {
 }
 
 func (t *TaskManager) ReassignTask(taskID string, skill data.SkillLevel) *data.Task {
-	// Find oldTask
-	oldTask, exist := t.AssignedTasks[taskID]
-	if !exist {
-		return nil
-	}
-
+	oldTask := t.AssignedTasks[taskID]
 	newTask := t.GetTask(skill)
 
 	// Remove task from assigned tasks
