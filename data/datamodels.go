@@ -45,11 +45,11 @@ type Task struct {
 	Description  string        `json:"description"`
 	Duration     float64       `json:"duration"`
 	Difficulty   Difficulty    `json:"difficulty"`
-	Priority     int           `json:"priority"`
 	Dependencies []string      `json:"dependencies"`
 	Ingredients  []Ingredient  `json:"ingredients"`
 	Kitchenware  []Kitchenware `json:"kitchenware"`
 	Completed    bool
+	// IsBackground bool          `json:"isBackgroundTask"`
 }
 
 type Ingredient struct {

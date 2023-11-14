@@ -154,6 +154,7 @@ func (s *Session) recordSnapshot(user *data.User, task *data.Task, status data.T
 		Timestamp: time.Now(),
 	}
 
-	s.Livefeed = append(s.Livefeed, feedSnapshot)
-	s.Observable.NotifyObservers("test")
+	// prepend
+	s.Livefeed = append([]*data.FeedSnapshot{feedSnapshot}, s.Livefeed...)
+	s.Observable.NotifyObservers(feedSnapshot)
 }

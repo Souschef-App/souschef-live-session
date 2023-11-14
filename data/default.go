@@ -13,7 +13,6 @@ var DefaultRecipe = Recipe{
 			Description:  "Warm pizza sauce in a microwave-safe bowl until hot, about 45 seconds.",
 			Duration:     1.0,
 			Difficulty:   Easy,
-			Priority:     0,
 			Dependencies: []string{},
 			Ingredients: []Ingredient{
 				{
@@ -42,7 +41,6 @@ var DefaultRecipe = Recipe{
 			Description:  "Cut the baked pizza crosswise into slices. Serve and enjoy.",
 			Duration:     5.0,
 			Difficulty:   Easy,
-			Priority:     0,
 			Dependencies: []string{"task-5"},
 			Ingredients:  []Ingredient{},
 			Kitchenware: []Kitchenware{
@@ -59,7 +57,6 @@ var DefaultRecipe = Recipe{
 			Description:  "Preheat the oven to 375 degrees F (190 degrees C).",
 			Duration:     10.0,
 			Difficulty:   Easy,
-			Priority:     1,
 			Dependencies: []string{},
 			Ingredients:  []Ingredient{},
 			Kitchenware: []Kitchenware{
@@ -76,7 +73,6 @@ var DefaultRecipe = Recipe{
 			Description:  "Split the French baguette in half lengthwise.",
 			Duration:     2.0,
 			Difficulty:   Medium,
-			Priority:     0,
 			Dependencies: []string{},
 			Ingredients: []Ingredient{
 				{
@@ -100,7 +96,6 @@ var DefaultRecipe = Recipe{
 			Description:  "Place the assembled pizza onto a baking tray and bake in the preheated oven until cheese is golden, about 18 minutes. Optional step: turn on the oven’s broiler, set a rack 6 inches below the heating element, and broil the pizza for a deeper color, 1 to 2 minutes.",
 			Duration:     20.0,
 			Difficulty:   Easy,
-			Priority:     0,
 			Dependencies: []string{"task-1", "task-4"},
 			Ingredients:  []Ingredient{},
 			Kitchenware: []Kitchenware{
@@ -117,7 +112,6 @@ var DefaultRecipe = Recipe{
 			Description:  "Spread pizza sauce on the baguette, sprinkle on cheese, and scatter sausage and pepperoni on top as desired.",
 			Duration:     5.0,
 			Difficulty:   Hard,
-			Priority:     0,
 			Dependencies: []string{"task-3", "task-2", "task-4.2", "task-4.3"},
 			Ingredients: []Ingredient{
 				{

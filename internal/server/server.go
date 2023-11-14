@@ -8,6 +8,7 @@ import (
 	"souschef/internal/message"
 	"souschef/internal/session"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -26,7 +27,28 @@ var (
 	connections   = make(map[*websocket.Conn]*data.User)
 )
 
+type LivefeedBroadcaster struct{}
+
+func (l *LivefeedBroadcaster) Update(snapshot any) {
+	broadcast(message.ServerFeedSnapshot, snapshot)
+}
+
 func StartWebSocket(addr string) {
+	observer := &LivefeedBroadcaster{}
+	ticker := time.NewTicker(60 * time.Second)
+	defer func() {
+		session.Live.Observable.UnregisterObserver(observer)
+		ticker.Stop()
+	}()
+
+	session.Live.Observable.RegisterObserver(observer)
+
+	go func() {
+		for range ticker.C {
+			broadcast(message.ServerFeedSnapshot, nil)
+		}
+	}()
+
 	http.HandleFunc("/ws", handleWebSocket)
 	fmt.Println("WebSocket server started on :8080/ws")
 
@@ -68,6 +90,9 @@ func registerConnection(conn *websocket.Conn, user *data.User) {
 		users = append(users, existUser)
 	}
 
+	connections[conn] = user
+	users = append(users, user)
+
 	broadcast(message.ServerClientConnected, user)
 
 	welcomeSnapshot := &data.WelcomeSnapshot{
@@ -76,9 +101,6 @@ func registerConnection(conn *websocket.Conn, user *data.User) {
 	}
 
 	transmit(conn, message.ServerHandshake, welcomeSnapshot)
-
-	// Associate connection with user
-	connections[conn] = user
 
 	fmt.Printf("Client connected. Total connections: %d\n", len(connections))
 }
@@ -90,6 +112,7 @@ func unregisterConnection(conn *websocket.Conn) {
 	if exist {
 		// Gracefully handle uncompleted tasks
 		session.Live.TaskManager.UnassignTask(user.TaskID)
+		processWaitingQueue()
 
 		delete(connections, conn)
 

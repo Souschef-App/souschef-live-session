@@ -5,6 +5,10 @@ import (
 	"souschef/data"
 )
 
+// TODO:
+// 1. Keep track of individual recipe progress
+// 2. Prioritize tasks from recipes with the least progress
+
 type TaskManager struct {
 	TaskRegistry  map[string]*data.Task // taskID → Task
 	AssignedTasks map[string]*data.Task
