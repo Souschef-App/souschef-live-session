@@ -73,12 +73,37 @@ func (s *Session) CompleteTask(user *data.User) error {
 
 	// 2. Unassign user's task
 	user.TaskID = ""
+
+	if completedTask.IsBackground {
+		s.recordSnapshot(user, completedTask, data.Deferred)
+		return nil
+	}
+
 	s.recordSnapshot(user, completedTask, data.Completion)
 
 	// 3. Check if all tasks are completed, i.e. session over
 	if s.RecipeManager.AllTasksCompleted() {
 		s.shutdown()
 	}
+
+	return nil
+}
+
+func (s *Session) CompleteBackgroundTask(user *data.User, taskID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.IsRunning {
+		return fmt.Errorf("session has not started")
+	}
+
+	// Mark task as completed
+	completedBgTask := s.RecipeManager.CompleteTask(taskID)
+	if completedBgTask == nil {
+		return fmt.Errorf("unable to complete background task '%s': the task was not found or is not currently in progress", taskID)
+	}
+
+	s.recordSnapshot(user, completedBgTask, data.Completion)
 
 	return nil
 }

@@ -12,11 +12,12 @@ type ClientMessage struct {
 type ClientMessageEnum string
 
 const (
-	ClientHandshake     ClientMessageEnum = "client_handshake"
-	ClientStartSession  ClientMessageEnum = "session_start"
-	ClientStopSession   ClientMessageEnum = "session_stop"
-	ClientCompletedTask ClientMessageEnum = "task_completed"
-	ClientRerollTask    ClientMessageEnum = "task_reroll"
+	ClientHandshake               ClientMessageEnum = "client_handshake"
+	ClientStartSession            ClientMessageEnum = "session_start"
+	ClientStopSession             ClientMessageEnum = "session_stop"
+	ClientCompletedTask           ClientMessageEnum = "task_completed"
+	ClientRerolledTask            ClientMessageEnum = "task_rerolled"
+	ClientCompletedBackgroundTask ClientMessageEnum = "task_background_completed"
 )
 
 // Send

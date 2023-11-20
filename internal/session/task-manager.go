@@ -77,11 +77,15 @@ func (t *TaskManager) CompleteTask(taskID string) bool {
 		return false
 	}
 
+	if task.IsBackground && task.Status == data.InProgress {
+		task.Status = data.Background
+		return true
+	}
+
 	task.Status = data.Completed
 
 	t.completedCount += 1
 	t.calculateProgress()
-
 	t.tryAddingDepsToAssignable(taskID)
 
 	return true

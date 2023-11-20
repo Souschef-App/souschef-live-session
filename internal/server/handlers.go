@@ -13,11 +13,12 @@ import (
 var (
 	waitingQueue    = map[*websocket.Conn]*data.User{}
 	commandHandlers = map[message.ClientMessageEnum]func(*websocket.Conn, json.RawMessage) error{
-		message.ClientHandshake:     handleClientHandshake,
-		message.ClientStartSession:  handleSessionStart,
-		message.ClientStopSession:   handleSessionStop,
-		message.ClientCompletedTask: handleTaskComplete,
-		message.ClientRerollTask:    handleTaskReroll,
+		message.ClientHandshake:               handleClientHandshake,
+		message.ClientStartSession:            handleSessionStart,
+		message.ClientStopSession:             handleSessionStop,
+		message.ClientCompletedTask:           handleTaskCompleted,
+		message.ClientRerolledTask:            handleTaskRerolled,
+		message.ClientCompletedBackgroundTask: handleTaskBackgroundCompleted,
 	}
 )
 
@@ -85,7 +86,7 @@ func handleSessionStop(conn *websocket.Conn, _ json.RawMessage) error {
 	return nil
 }
 
-func handleTaskComplete(conn *websocket.Conn, _ json.RawMessage) error {
+func handleTaskCompleted(conn *websocket.Conn, _ json.RawMessage) error {
 	user, exist := connections[conn]
 	if !exist {
 		return fmt.Errorf("user not found")
@@ -134,7 +135,7 @@ func processWaitingQueue() {
 	}
 }
 
-func handleTaskReroll(conn *websocket.Conn, _ json.RawMessage) error {
+func handleTaskRerolled(conn *websocket.Conn, _ json.RawMessage) error {
 	user, exist := connections[conn]
 	if !exist {
 		return fmt.Errorf("user not found")
@@ -147,6 +148,29 @@ func handleTaskReroll(conn *websocket.Conn, _ json.RawMessage) error {
 	}
 
 	transmit(conn, message.ServerTaskNew, task.ID)
+
+	return nil
+}
+
+func handleTaskBackgroundCompleted(conn *websocket.Conn, payload json.RawMessage) error {
+	user, exist := connections[conn]
+	if !exist {
+		return fmt.Errorf("user not found")
+	}
+
+	var taskID string
+	if err := json.Unmarshal(payload, &taskID); err != nil {
+		return err
+	}
+
+	if err := session.Live.CompleteBackgroundTask(user, taskID); err != nil {
+		return err
+	}
+
+	// Check if session is still running
+	if !session.Live.IsRunning {
+		broadcast(message.ServerMealCompleted, nil)
+	}
 
 	return nil
 }

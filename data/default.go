@@ -66,6 +66,7 @@ var DefaultRecipe = Recipe{
 					Quantity: 1,
 				},
 			},
+			IsBackground: true,
 		},
 		{
 			ID:           "task-2",

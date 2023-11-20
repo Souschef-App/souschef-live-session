@@ -14,6 +14,7 @@ type FeedAction int
 const (
 	Assignment FeedAction = iota
 	Completion
+	Deferred
 	Reroll
 )
 
