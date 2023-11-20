@@ -7,6 +7,7 @@ import (
 	"souschef/internal/message"
 	"souschef/internal/session"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -14,6 +15,7 @@ var (
 	waitingQueue    = map[*websocket.Conn]*data.User{}
 	commandHandlers = map[message.ClientMessageEnum]func(*websocket.Conn, json.RawMessage) error{
 		message.ClientHandshake:               handleClientHandshake,
+		message.ClientGuestHandshake:          handleGuestHandshake,
 		message.ClientStartSession:            handleSessionStart,
 		message.ClientStopSession:             handleSessionStop,
 		message.ClientCompletedTask:           handleTaskCompleted,
@@ -32,6 +34,34 @@ func handleClientHandshake(conn *websocket.Conn, payload json.RawMessage) error 
 
 	if session.Live.IsRunning {
 		task, err := session.Live.AssignTask(user)
+		if err != nil {
+			return err
+		} else if task == nil {
+			transmit(conn, message.ServerTaskNew, nil)
+		} else {
+			transmit(conn, message.ServerTaskNew, task.ID)
+		}
+	}
+
+	return nil
+}
+
+func handleGuestHandshake(conn *websocket.Conn, payload json.RawMessage) error {
+	var guestName string
+	if err := json.Unmarshal(payload, &guestName); err != nil {
+		return err
+	}
+
+	guest := &data.User{
+		ID:         uuid.NewString(),
+		Name:       guestName,
+		SkillLevel: data.Expert,
+	}
+
+	registerConnection(conn, guest)
+
+	if session.Live.IsRunning {
+		task, err := session.Live.AssignTask(guest)
 		if err != nil {
 			return err
 		} else if task == nil {
@@ -171,6 +201,8 @@ func handleTaskBackgroundCompleted(conn *websocket.Conn, payload json.RawMessage
 	if !session.Live.IsRunning {
 		broadcast(message.ServerMealCompleted, nil)
 	}
+
+	processWaitingQueue()
 
 	return nil
 }

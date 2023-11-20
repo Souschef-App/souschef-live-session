@@ -35,13 +35,13 @@ func (l *LivefeedBroadcaster) Update(snapshot any) {
 
 func StartWebSocket(addr string) {
 	observer := &LivefeedBroadcaster{}
+	session.Live.Observable.RegisterObserver(observer)
 	ticker := time.NewTicker(60 * time.Second)
+
 	defer func() {
 		session.Live.Observable.UnregisterObserver(observer)
 		ticker.Stop()
 	}()
-
-	session.Live.Observable.RegisterObserver(observer)
 
 	go func() {
 		for range ticker.C {
@@ -112,7 +112,7 @@ func unregisterConnection(conn *websocket.Conn) {
 	user, exist := connections[conn]
 	if exist {
 		// Gracefully handle uncompleted tasks
-		session.Live.RecipeManager.UnassignTask(user.TaskID)
+		session.Live.UnassignTask(user)
 		processWaitingQueue()
 
 		delete(connections, conn)

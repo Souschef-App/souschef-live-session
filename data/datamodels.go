@@ -53,6 +53,7 @@ type Task struct {
 	Kitchenware  []Kitchenware `json:"kitchenware"`
 	IsBackground bool          `json:"isBackgroundTask"`
 	Status       TaskStatus    `json:"status"`
+	Timestamp    time.Time     `json:"timestamp"`
 	Order        int           `json:"-"`
 }
 

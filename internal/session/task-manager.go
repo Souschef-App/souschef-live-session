@@ -3,6 +3,7 @@ package session
 import (
 	"sort"
 	"souschef/data"
+	"time"
 )
 
 type TaskManager struct {
@@ -79,10 +80,12 @@ func (t *TaskManager) CompleteTask(taskID string) bool {
 
 	if task.IsBackground && task.Status == data.InProgress {
 		task.Status = data.Background
+		task.Timestamp = time.Now()
 		return true
 	}
 
 	task.Status = data.Completed
+	task.Timestamp = time.Now()
 
 	t.completedCount += 1
 	t.calculateProgress()
@@ -95,6 +98,7 @@ func (t *TaskManager) UnassignTask(taskID string) {
 	task, exist := t.Registry[taskID]
 	if exist && task.Status == data.InProgress {
 		task.Status = data.Unassigned
+		task.Timestamp = time.Now()
 		t.AssignableTasks = append(t.AssignableTasks, task)
 	}
 }
@@ -131,6 +135,7 @@ func (t *TaskManager) markTaskAssigned(task *data.Task) bool {
 
 	// Task is either unassigned or in-progress (reroll)
 	task.Status = data.InProgress
+	task.Timestamp = time.Now()
 	return true
 }
 

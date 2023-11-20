@@ -12,7 +12,8 @@ type ClientMessage struct {
 type ClientMessageEnum string
 
 const (
-	ClientHandshake               ClientMessageEnum = "client_handshake"
+	ClientHandshake               ClientMessageEnum = "handshake"
+	ClientGuestHandshake          ClientMessageEnum = "guest_handshake"
 	ClientStartSession            ClientMessageEnum = "session_start"
 	ClientStopSession             ClientMessageEnum = "session_stop"
 	ClientCompletedTask           ClientMessageEnum = "task_completed"

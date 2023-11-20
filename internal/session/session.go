@@ -165,6 +165,13 @@ func (s *Session) AssignTask(user *data.User) (*data.Task, error) {
 	return task, nil // task can be nil when no suitable task found
 }
 
+func (s *Session) UnassignTask(user *data.User) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.RecipeManager.UnassignTask(user.TaskID)
+}
+
 // PRIVATE METHODS
 
 func (s *Session) shutdown() error {
