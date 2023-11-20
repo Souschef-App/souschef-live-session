@@ -1,16 +1,19 @@
 package data
 
-import "time"
+import (
+	"time"
+)
 
 type WelcomeSnapshot struct {
-	Users    []*User         `json:"users"`
-	Livefeed []*FeedSnapshot `json:"livefeed"`
+	Users    []*User          `json:"users"`
+	Tasks    map[string]*Task `json:"tasks"`
+	Livefeed []*FeedSnapshot  `json:"livefeed"`
 }
 
 type FeedSnapshot struct {
 	User      *User      `json:"user"`
 	Task      *Task      `json:"task"`
-	Status    TaskStatus `json:"status"`
+	Action    FeedAction `json:"action"`
 	Timestamp time.Time  `json:"timestamp"`
 }
 
@@ -48,8 +51,9 @@ type Task struct {
 	Dependencies []string      `json:"dependencies"`
 	Ingredients  []Ingredient  `json:"ingredients"`
 	Kitchenware  []Kitchenware `json:"kitchenware"`
-	Completed    bool
-	// IsBackground bool          `json:"isBackgroundTask"`
+	IsBackground bool          `json:"isBackgroundTask"`
+	Status       TaskStatus    `json:"status"`
+	Order        int           `json:"-"`
 }
 
 type Ingredient struct {

@@ -45,7 +45,7 @@ func StartWebSocket(addr string) {
 
 	go func() {
 		for range ticker.C {
-			broadcast(message.ServerFeedSnapshot, nil)
+			broadcast(message.ServerTimestampUpdate, nil)
 		}
 	}()
 
@@ -97,6 +97,7 @@ func registerConnection(conn *websocket.Conn, user *data.User) {
 
 	welcomeSnapshot := &data.WelcomeSnapshot{
 		Users:    users,
+		Tasks:    session.Live.RecipeManager.Registry,
 		Livefeed: session.Live.Livefeed,
 	}
 
@@ -111,7 +112,7 @@ func unregisterConnection(conn *websocket.Conn) {
 	user, exist := connections[conn]
 	if exist {
 		// Gracefully handle uncompleted tasks
-		session.Live.TaskManager.UnassignTask(user.TaskID)
+		session.Live.RecipeManager.UnassignTask(user.TaskID)
 		processWaitingQueue()
 
 		delete(connections, conn)

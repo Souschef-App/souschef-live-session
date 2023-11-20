@@ -36,4 +36,5 @@ const (
 	ServerMealCompleted      ServerMessageEnum = "meal_completed"
 	ServerTaskNew            ServerMessageEnum = "task_new"
 	ServerFeedSnapshot       ServerMessageEnum = "feed_snapshot"
+	ServerTimestampUpdate    ServerMessageEnum = "timestamp_update"
 )

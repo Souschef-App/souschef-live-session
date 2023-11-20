@@ -8,29 +8,28 @@ import (
 	"time"
 )
 
-// TODO: Keep track of live feed
 type Session struct {
-	IsRunning   bool
-	HostID      string
-	Recipes     []*data.Recipe
-	Livefeed    []*data.FeedSnapshot
-	TaskManager *TaskManager
-	Observable  *utils.Observable
-	mu          sync.Mutex
-}
-
-func CreateSession(mealplan data.MealPlan) *Session {
-	return &Session{
-		IsRunning:   false,
-		HostID:      mealplan.HostID,
-		Recipes:     mealplan.Recipes,
-		Livefeed:    []*data.FeedSnapshot{},
-		TaskManager: CreateTaskManager(),
-		Observable:  utils.CreateObservable(),
-	}
+	IsRunning     bool
+	HostID        string
+	Livefeed      []*data.FeedSnapshot
+	RecipeManager *RecipeManager
+	Observable    *utils.Observable
+	mu            sync.Mutex
 }
 
 var Live *Session
+
+func CreateSession(mealplan data.MealPlan) *Session {
+	return &Session{
+		IsRunning:     false,
+		HostID:        mealplan.HostID,
+		Livefeed:      []*data.FeedSnapshot{},
+		RecipeManager: CreateRecipeManager(mealplan.Recipes),
+		Observable:    utils.CreateObservable(),
+	}
+}
+
+// PUBLIC METHODS
 
 func (s *Session) Start(userID string) error {
 	s.mu.Lock()
@@ -43,7 +42,6 @@ func (s *Session) Start(userID string) error {
 	}
 
 	s.IsRunning = true
-	s.TaskManager.Init(s.Recipes)
 	fmt.Println("Live session started!")
 
 	return nil
@@ -56,20 +54,7 @@ func (s *Session) Stop(userID string) error {
 		return fmt.Errorf("only the session host can stop the session")
 	}
 
-	return s.internalStop()
-}
-
-func (s *Session) internalStop() error {
-	if !s.IsRunning {
-		return fmt.Errorf("session has not started")
-	}
-
-	s.IsRunning = false
-	fmt.Println("Live session stopped.")
-
-	// TODO: Reset algorithm to default
-
-	return nil
+	return s.shutdown()
 }
 
 func (s *Session) CompleteTask(user *data.User) error {
@@ -81,23 +66,24 @@ func (s *Session) CompleteTask(user *data.User) error {
 	}
 
 	// 1. Mark task as completed
-	completedTask := s.TaskManager.CompleteTask(user.TaskID)
+	completedTask := s.RecipeManager.CompleteTask(user.TaskID)
 	if completedTask == nil {
-		return fmt.Errorf("task completed not found")
+		return fmt.Errorf("unable to complete task '%s': the task was not found or is not currently in progress", user.TaskID)
 	}
 
 	// 2. Unassign user's task
 	user.TaskID = ""
-	s.recordSnapshot(user, completedTask, data.Completed)
+	s.recordSnapshot(user, completedTask, data.Completion)
 
-	// TODO: Refine this idea
-	if s.TaskManager.AllTasksCompleted() {
-		s.internalStop()
+	// 3. Check if all tasks are completed, i.e. session over
+	if s.RecipeManager.AllTasksCompleted() {
+		s.shutdown()
 	}
 
 	return nil
 }
 
+// If error is nil, task is guaranteed to not be nil
 func (s *Session) RerollTask(user *data.User) (*data.Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -111,13 +97,21 @@ func (s *Session) RerollTask(user *data.User) (*data.Task, error) {
 		userSkillLevel = data.Expert
 	}
 
-	newTask := s.TaskManager.ReassignTask(user.TaskID, userSkillLevel)
-	if newTask != nil && user.TaskID != newTask.ID {
-		user.TaskID = newTask.ID
-		s.recordSnapshot(user, newTask, data.Rerolled)
+	oldTask, newTask := s.RecipeManager.ReassignTask(user.TaskID, userSkillLevel)
+	if oldTask == nil && newTask == nil {
+		return nil, fmt.Errorf("failed to reroll task")
 	}
 
-	return newTask, nil
+	s.recordSnapshot(user, oldTask, data.Reroll)
+
+	if newTask == nil {
+		s.recordSnapshot(user, oldTask, data.Assignment)
+		return oldTask, nil
+	} else {
+		user.TaskID = newTask.ID
+		s.recordSnapshot(user, newTask, data.Assignment)
+		return newTask, nil
+	}
 }
 
 func (s *Session) AssignTask(user *data.User) (*data.Task, error) {
@@ -137,20 +131,33 @@ func (s *Session) AssignTask(user *data.User) (*data.Task, error) {
 		userSkillLevel = data.Expert
 	}
 
-	task := s.TaskManager.GetTask(userSkillLevel)
+	task := s.RecipeManager.GetTask(userSkillLevel)
 	if task != nil {
 		user.TaskID = task.ID
-		s.recordSnapshot(user, task, data.Assigned)
+		s.recordSnapshot(user, task, data.Assignment)
 	}
 
 	return task, nil // task can be nil when no suitable task found
 }
 
-func (s *Session) recordSnapshot(user *data.User, task *data.Task, status data.TaskStatus) {
+// PRIVATE METHODS
+
+func (s *Session) shutdown() error {
+	if !s.IsRunning {
+		return fmt.Errorf("session has not started")
+	}
+
+	s.IsRunning = false
+	fmt.Println("Live session stopped.")
+
+	return nil
+}
+
+func (s *Session) recordSnapshot(user *data.User, task *data.Task, status data.FeedAction) {
 	feedSnapshot := &data.FeedSnapshot{
 		User:      user,
 		Task:      task,
-		Status:    status,
+		Action:    status,
 		Timestamp: time.Now(),
 	}
 

@@ -5,72 +5,59 @@ import (
 	"souschef/data"
 )
 
-// TODO:
-// 1. Keep track of individual recipe progress
-// 2. Prioritize tasks from recipes with the least progress
-
 type TaskManager struct {
-	TaskRegistry  map[string]*data.Task // taskID → Task
-	AssignedTasks map[string]*data.Task
-	Dependants    map[string][]string
-	QueuedTasks   []*data.Task
+	Registry        map[string]*data.Task
+	Dependants      map[string][]string
+	AssignableTasks []*data.Task
+	Progress        float32
+	completedCount  int
 }
 
-func CreateTaskManager() *TaskManager {
-	return &TaskManager{
-		TaskRegistry:  make(map[string]*data.Task),
-		AssignedTasks: make(map[string]*data.Task),
-		Dependants:    make(map[string][]string),
-		QueuedTasks:   []*data.Task{},
+func CreateTaskManager(recipe *data.Recipe) *TaskManager {
+	tm := &TaskManager{
+		Registry:        make(map[string]*data.Task),
+		Dependants:      make(map[string][]string),
+		AssignableTasks: []*data.Task{},
+		Progress:        0.0,
+		completedCount:  0,
 	}
-}
 
-func (t *TaskManager) AllTasksCompleted() bool {
-	for _, task := range t.TaskRegistry {
-		if !task.Completed {
-			return false
+	// Populate Registry & AssignableTasks
+	for index, task := range recipe.Tasks {
+		tempTask := task
+		tempTask.Order = index
+		tempTask.Status = data.Unassigned // SAFETY
+		tm.Registry[tempTask.ID] = &tempTask
+		if len(tempTask.Dependencies) == 0 {
+			tm.AssignableTasks = append(tm.AssignableTasks, &tempTask)
 		}
 	}
 
-	return true
-}
-
-func (t *TaskManager) Init(recipes []*data.Recipe) {
-	// Create task registry & preload task queue
-	for _, recipe := range recipes {
-		for _, task := range recipe.Tasks {
-			tempTask := task
-			t.TaskRegistry[tempTask.ID] = &tempTask
-			if len(tempTask.Dependencies) == 0 {
-				t.QueuedTasks = append(t.QueuedTasks, &tempTask)
-			}
-		}
-	}
-
-	// Create reverse dependencies table
-	// i.e: Find all tasks that depend on "task_x"
-	for taskID, task := range t.TaskRegistry {
+	// Populate Dependants by creating a reverse dependency map
+	// i.e: Find all tasks that depend on task_x
+	for taskID, task := range tm.Registry {
 		if len(task.Dependencies) > 0 {
 			for _, dependantID := range task.Dependencies {
-				if _, ok := t.Dependants[dependantID]; !ok {
-					// Create key if doesn't exist
-					t.Dependants[dependantID] = []string{}
+				if _, ok := tm.Dependants[dependantID]; !ok {
+					// Create entry if doesn't exist
+					tm.Dependants[dependantID] = []string{}
 				}
 
-				t.Dependants[dependantID] = append(t.Dependants[dependantID], taskID)
+				tm.Dependants[dependantID] = append(tm.Dependants[dependantID], taskID)
 			}
 		}
 	}
+
+	return tm
 }
 
-func (t *TaskManager) GetTask(skill data.SkillLevel) *data.Task {
-	for i, task := range t.QueuedTasks {
+func (t *TaskManager) FindEligibleTask(skill data.SkillLevel) *data.Task {
+	for i, task := range t.AssignableTasks {
 		if int(task.Difficulty) <= int(skill) {
-			// Remove from queued tasks
-			t.QueuedTasks = append(t.QueuedTasks[:i], t.QueuedTasks[i+1:]...)
-
-			// Add to assigned tasks
-			t.AssignedTasks[task.ID] = task
+			if t.markTaskAssigned(task) {
+				// Remove
+				t.AssignableTasks = append(t.AssignableTasks[:i], t.AssignableTasks[i+1:]...)
+			}
 
 			return task
 		}
@@ -79,79 +66,85 @@ func (t *TaskManager) GetTask(skill data.SkillLevel) *data.Task {
 	return nil
 }
 
-// Marks a task as completed and removes it from the assigned tasks.
-// It checks if any dependent tasks can now be queued and adds them to the queue.
-//
-// Parameters:
-// - taskID: The unique identifier of the task to complete.
-//
-// Returns:
-// - The completed task or nil if the task does not exist in the assigned tasks.
-func (t *TaskManager) CompleteTask(taskID string) *data.Task {
-	// 1. Mark task as completed
-	task, exist := t.AssignedTasks[taskID]
+func (t *TaskManager) CompleteTask(taskID string) bool {
+	task, exist := t.Registry[taskID]
 	if !exist {
-		return nil
+		return false
 	}
 
-	task.Completed = true
+	// Task can only be completed if it is either in progress or in the background
+	if task.Status != data.InProgress && task.Status != data.Background {
+		return false
+	}
 
-	// 2. Remove task from assigned tasks
-	delete(t.AssignedTasks, taskID)
+	task.Status = data.Completed
 
-	// 3. Check if any dependent tasks can now be queued
-	var oldQueueSize = len(t.QueuedTasks)
-	dependants, exist := t.Dependants[task.ID]
+	t.completedCount += 1
+	t.calculateProgress()
+
+	t.tryAddingDepsToAssignable(taskID)
+
+	return true
+}
+
+func (t *TaskManager) UnassignTask(taskID string) {
+	task, exist := t.Registry[taskID]
+	if exist && task.Status == data.InProgress {
+		task.Status = data.Unassigned
+		t.AssignableTasks = append(t.AssignableTasks, task)
+	}
+}
+
+// PRIVATE METHODS
+
+func (t *TaskManager) tryAddingDepsToAssignable(taskID string) {
+	var queueModified = false
+
+	dependants, exist := t.Dependants[taskID]
 	if exist {
 		for _, taskID := range dependants {
-			task, exist := t.TaskRegistry[taskID]
-			if exist && t.hasUncompletedDeps(task) {
-				t.QueuedTasks = append(t.QueuedTasks, task)
+			task, exist := t.Registry[taskID]
+			// SAFETY CHECK: Task should always be unassigned, but we check anyways
+			if exist && task.Status == data.Unassigned && !t.hasUncompletedDeps(task) {
+				t.AssignableTasks = append(t.AssignableTasks, task)
+				queueModified = true
 			}
 		}
 	}
 
-	var queueModified = len(t.QueuedTasks) != oldQueueSize
-
-	// 4. Re-sort queued tasks based on duration (Optional)
+	// Sort based on task order
 	if queueModified {
-		sort.Slice(t.QueuedTasks, func(i, j int) bool {
-			return t.QueuedTasks[i].Duration > t.QueuedTasks[j].Duration
+		sort.Slice(t.AssignableTasks, func(i, j int) bool {
+			return t.AssignableTasks[i].Order > t.AssignableTasks[j].Order
 		})
 	}
-
-	return task
 }
 
-func (t *TaskManager) ReassignTask(taskID string, skill data.SkillLevel) *data.Task {
-	oldTask := t.AssignedTasks[taskID]
-	newTask := t.GetTask(skill)
-
-	// Remove task from assigned tasks
-	if newTask != nil {
-		delete(t.AssignedTasks, oldTask.ID)
-		t.QueuedTasks = append(t.QueuedTasks, oldTask)
-		return newTask
+func (t *TaskManager) markTaskAssigned(task *data.Task) bool {
+	if task.Status == data.Completed || task.Status == data.Background {
+		return false
 	}
 
-	return oldTask
-}
-
-func (t *TaskManager) UnassignTask(taskID string) {
-	task, exist := t.AssignedTasks[taskID]
-	if exist {
-		delete(t.AssignedTasks, taskID)
-		t.QueuedTasks = append(t.QueuedTasks, task)
-	}
+	// Task is either unassigned or in-progress (reroll)
+	task.Status = data.InProgress
+	return true
 }
 
 func (t *TaskManager) hasUncompletedDeps(task *data.Task) bool {
 	for _, taskID := range task.Dependencies {
-		dependancyTask, exist := t.TaskRegistry[taskID]
-		if exist && !dependancyTask.Completed {
-			return false
+		dependancyTask, exist := t.Registry[taskID]
+		if exist && dependancyTask.Status != data.Completed {
+			return true
 		}
 	}
 
-	return true
+	return false
+}
+
+func (r *TaskManager) calculateProgress() {
+	numTask := len(r.Registry)
+
+	if numTask > 0 {
+		r.Progress = float32(r.completedCount) / float32(numTask)
+	}
 }

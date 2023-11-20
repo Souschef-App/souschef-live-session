@@ -3,9 +3,18 @@ package data
 type TaskStatus int
 
 const (
-	Assigned TaskStatus = iota
+	Unassigned TaskStatus = iota
+	InProgress
+	Background
 	Completed
-	Rerolled
+)
+
+type FeedAction int
+
+const (
+	Assignment FeedAction = iota
+	Completion
+	Reroll
 )
 
 type SkillLevel int

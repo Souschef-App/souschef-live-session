@@ -33,9 +33,11 @@ func handleClientHandshake(conn *websocket.Conn, payload json.RawMessage) error 
 		task, err := session.Live.AssignTask(user)
 		if err != nil {
 			return err
+		} else if task == nil {
+			transmit(conn, message.ServerTaskNew, nil)
+		} else {
+			transmit(conn, message.ServerTaskNew, task.ID)
 		}
-
-		transmit(conn, message.ServerTaskNew, task)
 	}
 
 	return nil
@@ -56,8 +58,12 @@ func handleSessionStart(conn *websocket.Conn, _ json.RawMessage) error {
 	// Assign a task to all connected users
 	for conn, user := range connections {
 		task, err := session.Live.AssignTask(user)
-		if err == nil {
-			transmit(conn, message.ServerTaskNew, task)
+		if err != nil {
+			fmt.Println("Failed to assign task to user: ", user.ID)
+		} else if task == nil {
+			transmit(conn, message.ServerTaskNew, nil)
+		} else {
+			transmit(conn, message.ServerTaskNew, task.ID)
 		}
 	}
 
@@ -70,9 +76,13 @@ func handleSessionStop(conn *websocket.Conn, _ json.RawMessage) error {
 		return fmt.Errorf("user not found")
 	}
 
+	if err := session.Live.Stop(user.ID); err != nil {
+		return err
+	}
+
 	waitingQueue = nil
 
-	return session.Live.Stop(user.ID)
+	return nil
 }
 
 func handleTaskComplete(conn *websocket.Conn, _ json.RawMessage) error {
@@ -104,10 +114,12 @@ func handleTaskComplete(conn *websocket.Conn, _ json.RawMessage) error {
 	// 4.1 If no task is available, add to waiting queue
 	if task == nil {
 		waitingQueue[conn] = user
+		// 5. Transmit no task available to the user
+		transmit(conn, message.ServerTaskNew, nil)
+	} else {
+		// 5.1 Transmit the new task to the user
+		transmit(conn, message.ServerTaskNew, task.ID)
 	}
-
-	// 5. Transmit the new task to the user
-	transmit(conn, message.ServerTaskNew, task)
 
 	return nil
 }
@@ -116,8 +128,8 @@ func processWaitingQueue() {
 	for conn, user := range waitingQueue {
 		task, err := session.Live.AssignTask(user)
 		if err == nil && task != nil {
+			transmit(conn, message.ServerTaskNew, task.ID)
 			delete(waitingQueue, conn)
-			transmit(conn, message.ServerTaskNew, task)
 		}
 	}
 }
@@ -128,12 +140,13 @@ func handleTaskReroll(conn *websocket.Conn, _ json.RawMessage) error {
 		return fmt.Errorf("user not found")
 	}
 
+	// Reroll guarantees non-nil task if no error
 	task, err := session.Live.RerollTask(user)
 	if err != nil {
 		return err
 	}
 
-	transmit(conn, message.ServerTaskNew, task)
+	transmit(conn, message.ServerTaskNew, task.ID)
 
 	return nil
 }
