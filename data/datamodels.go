@@ -60,8 +60,14 @@ type Task struct {
 type Ingredient struct {
 	ID       string      `json:"id"`
 	Name     string      `json:"name"`
-	Quantity float64     `json:"quantity"`
+	Quantity Fraction    `json:"quantity"`
 	Unit     CookingUnit `json:"unit"`
+}
+
+type Fraction struct {
+	Whole       int64 `json:"whole"`
+	Numerator   int64 `json:"numerator"`
+	Denominator int64 `json:"denominator"`
 }
 
 type Kitchenware struct {
