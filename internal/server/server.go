@@ -8,7 +8,6 @@ import (
 	"souschef/internal/message"
 	"souschef/internal/session"
 	"sync"
-	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -23,30 +22,18 @@ var (
 			return true
 		},
 	}
-	connectionsMu sync.Mutex
-	connections   = make(map[*websocket.Conn]*data.User)
+	connectionsMu        sync.Mutex
+	connections          = make(map[*websocket.Conn]*data.User)
+	totalConnectionCount = 0
 )
 
-type LivefeedBroadcaster struct{}
-
-func (l *LivefeedBroadcaster) Update(snapshot any) {
-	broadcast(message.ServerFeedSnapshot, snapshot)
-}
-
 func StartWebSocket(addr string) {
-	observer := &LivefeedBroadcaster{}
-	session.Live.Observable.RegisterObserver(observer)
-	ticker := time.NewTicker(60 * time.Second)
-
+	// Cleanup
 	defer func() {
-		session.Live.Observable.UnregisterObserver(observer)
-		ticker.Stop()
-	}()
-
-	go func() {
-		for range ticker.C {
-			broadcast(message.ServerTimestampUpdate, nil)
+		if session.Live != nil {
+			session.Live.Observable.UnregisterObserver(observer)
 		}
+		ticker.Stop()
 	}()
 
 	http.HandleFunc("/ws", handleWebSocket)
@@ -65,6 +52,8 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err)
 		return
 	}
+
+	totalConnectionCount++
 
 	// TODO: Close connection if no handshake occurs
 	handleMessage(conn) // Blocking call
@@ -110,7 +99,7 @@ func unregisterConnection(conn *websocket.Conn) {
 	connectionsMu.Lock()
 
 	user, exist := connections[conn]
-	if exist {
+	if exist && session.Live.IsRunning {
 		// Gracefully handle uncompleted tasks
 		session.Live.UnassignTask(user)
 		processWaitingQueue()
@@ -126,6 +115,11 @@ func unregisterConnection(conn *websocket.Conn) {
 	connectionsMu.Unlock()
 
 	if len(connections) == 0 {
+		if totalConnectionCount == 1 {
+			fmt.Println("Live session ready!")
+			return
+		}
+
 		if err := server.Shutdown(context.TODO()); err != nil {
 			fmt.Println("HTTP server shutdown error:", err)
 		}

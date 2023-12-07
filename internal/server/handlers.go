@@ -1,21 +1,26 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"souschef/data"
 	"souschef/internal/message"
 	"souschef/internal/session"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
 var (
-	waitingQueue    = map[*websocket.Conn]*data.User{}
-	commandHandlers = map[message.ClientMessageEnum]func(*websocket.Conn, json.RawMessage) error{
+	ticker          *time.Ticker = nil
+	observer                     = &LivefeedBroadcaster{}
+	waitingQueue                 = map[*websocket.Conn]*data.User{}
+	commandHandlers              = map[message.ClientMessageEnum]func(*websocket.Conn, json.RawMessage) error{
 		message.ClientHandshake:               handleClientHandshake,
 		message.ClientGuestHandshake:          handleGuestHandshake,
+		message.ClientCreateSession:           handleSessionCreate,
 		message.ClientStartSession:            handleSessionStart,
 		message.ClientStopSession:             handleSessionStop,
 		message.ClientCompletedTask:           handleTaskCompleted,
@@ -74,6 +79,48 @@ func handleGuestHandshake(conn *websocket.Conn, payload json.RawMessage) error {
 	return nil
 }
 
+type LivefeedBroadcaster struct{}
+
+func (l *LivefeedBroadcaster) Update(snapshot any) {
+	broadcast(message.ServerFeedSnapshot, snapshot)
+}
+
+func handleSessionCreate(conn *websocket.Conn, payload json.RawMessage) error {
+	var mealplan2 data.MealPlan
+	if err := json.Unmarshal(payload, &mealplan2); err != nil {
+		return err
+	}
+
+	fmt.Println("Creating Session...")
+	fmt.Println("Payload: ", mealplan2)
+
+	var mealplan = data.MealPlan{
+		ID:       "123",
+		HostID:   "123",
+		Occasion: data.Home,
+		Recipes:  []*data.Recipe{&data.DefaultRecipe},
+	}
+
+	session.Live = session.CreateSession(mealplan)
+
+	// Setup observer
+	session.Live.Observable.RegisterObserver(observer)
+	if ticker == nil {
+		ticker = time.NewTicker(60 * time.Second)
+	} else {
+		ticker.Reset(60 * time.Second)
+	}
+
+	go func() {
+		for range ticker.C {
+			broadcast(message.ServerTimestampUpdate, nil)
+		}
+	}()
+
+	session.Live.Start("123")
+	return nil
+}
+
 func handleSessionStart(conn *websocket.Conn, _ json.RawMessage) error {
 	user, exist := connections[conn]
 	if !exist {
@@ -112,6 +159,10 @@ func handleSessionStop(conn *websocket.Conn, _ json.RawMessage) error {
 	}
 
 	waitingQueue = nil
+
+	if err := server.Shutdown(context.TODO()); err != nil {
+		fmt.Println("HTTP server shutdown error:", err)
+	}
 
 	return nil
 }

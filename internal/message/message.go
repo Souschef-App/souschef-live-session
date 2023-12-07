@@ -14,6 +14,7 @@ type ClientMessageEnum string
 const (
 	ClientHandshake               ClientMessageEnum = "handshake"
 	ClientGuestHandshake          ClientMessageEnum = "guest_handshake"
+	ClientCreateSession           ClientMessageEnum = "session_create"
 	ClientStartSession            ClientMessageEnum = "session_start"
 	ClientStopSession             ClientMessageEnum = "session_stop"
 	ClientCompletedTask           ClientMessageEnum = "task_completed"
