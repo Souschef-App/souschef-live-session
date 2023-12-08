@@ -48,7 +48,7 @@ type Task struct {
 	Description  string        `json:"description"`
 	Duration     float64       `json:"duration"`
 	Difficulty   Difficulty    `json:"difficulty"`
-	Dependencies []string      `json:"dependencies"`
+	Dependencies []Dependency  `json:"dependencies"`
 	Ingredients  []Ingredient  `json:"ingredients"`
 	Kitchenware  []Kitchenware `json:"kitchenware"`
 	IsBackground bool          `json:"isBackgroundTask"`
@@ -74,4 +74,10 @@ type Kitchenware struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Quantity int    `json:"quantity"`
+}
+
+type Dependency struct {
+	ID           string `json:"id"`
+	DependencyID string `json:"dependencyid"`
+	Title        string `json:"title"`
 }

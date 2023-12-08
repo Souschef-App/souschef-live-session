@@ -38,13 +38,13 @@ func CreateTaskManager(recipe *data.Recipe) *TaskManager {
 	// i.e: Find all tasks that depend on task_x
 	for taskID, task := range tm.Registry {
 		if len(task.Dependencies) > 0 {
-			for _, dependantID := range task.Dependencies {
-				if _, ok := tm.Dependants[dependantID]; !ok {
+			for _, dependant := range task.Dependencies {
+				if _, ok := tm.Dependants[dependant.DependencyID]; !ok {
 					// Create entry if doesn't exist
-					tm.Dependants[dependantID] = []string{}
+					tm.Dependants[dependant.DependencyID] = []string{}
 				}
 
-				tm.Dependants[dependantID] = append(tm.Dependants[dependantID], taskID)
+				tm.Dependants[dependant.DependencyID] = append(tm.Dependants[dependant.DependencyID], taskID)
 			}
 		}
 	}
@@ -140,8 +140,8 @@ func (t *TaskManager) markTaskAssigned(task *data.Task) bool {
 }
 
 func (t *TaskManager) hasUncompletedDeps(task *data.Task) bool {
-	for _, taskID := range task.Dependencies {
-		dependancyTask, exist := t.Registry[taskID]
+	for _, taskDependency := range task.Dependencies {
+		dependancyTask, exist := t.Registry[taskDependency.DependencyID]
 		if exist && dependancyTask.Status != data.Completed {
 			return true
 		}

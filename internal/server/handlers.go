@@ -94,14 +94,14 @@ func handleSessionCreate(conn *websocket.Conn, payload json.RawMessage) error {
 	fmt.Println("Creating Session...")
 	fmt.Println("Payload: ", mealplan2)
 
-	var mealplan = data.MealPlan{
-		ID:       "123",
-		HostID:   "123",
-		Occasion: data.Home,
-		Recipes:  []*data.Recipe{&data.DefaultRecipe},
-	}
+	// var mealplan = data.MealPlan{
+	// 	ID:       "123",
+	// 	HostID:   "123",
+	// 	Occasion: data.Home,
+	// 	Recipes:  []*data.Recipe{&data.DefaultRecipe},
+	// }
 
-	session.Live = session.CreateSession(mealplan)
+	session.Live = session.CreateSession(mealplan2)
 
 	// Setup observer
 	session.Live.Observable.RegisterObserver(observer)
@@ -117,7 +117,7 @@ func handleSessionCreate(conn *websocket.Conn, payload json.RawMessage) error {
 		}
 	}()
 
-	session.Live.Start("123")
+	session.Live.Start(mealplan2.HostID)
 	return nil
 }
 
