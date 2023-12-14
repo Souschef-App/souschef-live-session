@@ -86,22 +86,17 @@ func (l *LivefeedBroadcaster) Update(snapshot any) {
 }
 
 func handleSessionCreate(conn *websocket.Conn, payload json.RawMessage) error {
-	var mealplan2 data.MealPlan
-	if err := json.Unmarshal(payload, &mealplan2); err != nil {
+	var mealplan data.MealPlan
+	if err := json.Unmarshal(payload, &mealplan); err != nil {
 		return err
 	}
 
+	// Add default recipe temporarily
+	mealplan.Recipes = append(mealplan.Recipes, &data.DefaultRecipe)
+
 	fmt.Println("Creating Session...")
-	fmt.Println("Payload: ", mealplan2)
 
-	// var mealplan = data.MealPlan{
-	// 	ID:       "123",
-	// 	HostID:   "123",
-	// 	Occasion: data.Home,
-	// 	Recipes:  []*data.Recipe{&data.DefaultRecipe},
-	// }
-
-	session.Live = session.CreateSession(mealplan2)
+	session.Live = session.CreateSession(mealplan)
 
 	// Setup observer
 	session.Live.Observable.RegisterObserver(observer)
@@ -117,7 +112,7 @@ func handleSessionCreate(conn *websocket.Conn, payload json.RawMessage) error {
 		}
 	}()
 
-	session.Live.Start(mealplan2.HostID)
+	session.Live.Start(mealplan.HostID)
 	return nil
 }
 
